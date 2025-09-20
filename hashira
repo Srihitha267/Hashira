@@ -1,0 +1,183 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <map>
+#include <cmath>
+#include <algorithm>
+#include <sstream>
+
+using namespace std;
+
+// Function to convert a number from any base to decimal
+long long baseToDecimal(const string& value, int base) {
+    long long result = 0;
+    long long power = 1;
+    
+    // Process from right to left
+    for (int i = value.length() - 1; i >= 0; i--) {
+        char digit = value[i];
+        int digitValue;
+        
+        if (digit >= '0' && digit <= '9') {
+            digitValue = digit - '0';
+        } else if (digit >= 'a' && digit <= 'z') {
+            digitValue = digit - 'a' + 10;
+        } else if (digit >= 'A' && digit <= 'Z') {
+            digitValue = digit - 'A' + 10;
+        } else {
+            continue; // Skip invalid characters
+        }
+        
+        if (digitValue >= base) {
+            continue; // Skip invalid digits for the given base
+        }
+        
+        result += digitValue * power;
+        power *= base;
+    }
+    
+    return result;
+}
+
+// Function to perform Lagrange interpolation and find the constant term
+long long lagrangeInterpolation(const vector<pair<long long, long long>>& points) {
+    int n = points.size();
+    long long result = 0;
+    
+    // Calculate the constant term using Lagrange interpolation
+    // We only need f(0), so we set x = 0 in the Lagrange formula
+    for (int i = 0; i < n; i++) {
+        long long xi = points[i].first;
+        long long yi = points[i].second;
+        
+        // Calculate the Lagrange basis polynomial Li(0)
+        long long numerator = 1;
+        long long denominator = 1;
+        
+        for (int j = 0; j < n; j++) {
+            if (i != j) {
+                long long xj = points[j].first;
+                numerator *= (0 - xj);  // Since we want f(0)
+                denominator *= (xi - xj);
+            }
+        }
+        
+        // Add yi * Li(0) to the result
+        if (denominator != 0) {
+            result += yi * numerator / denominator;
+        }
+    }
+    
+    return result;
+}
+
+// Simple JSON parser for this specific format
+map<string, string> parseJSON(const string& jsonStr) {
+    map<string, string> result;
+    
+    // Find the keys section
+    size_t keysStart = jsonStr.find("\"keys\"");
+    if (keysStart != string::npos) {
+        size_t nPos = jsonStr.find("\"n\"", keysStart);
+        size_t nValueStart = jsonStr.find(":", nPos) + 1;
+        size_t nValueEnd = jsonStr.find(",", nValueStart);
+        if (nValueEnd == string::npos) nValueEnd = jsonStr.find("}", nValueStart);
+        
+        string nValue = jsonStr.substr(nValueStart, nValueEnd - nValueStart);
+        nValue.erase(remove_if(nValue.begin(), nValue.end(), ::isspace), nValue.end());
+        result["n"] = nValue;
+        
+        size_t kPos = jsonStr.find("\"k\"", keysStart);
+        size_t kValueStart = jsonStr.find(":", kPos) + 1;
+        size_t kValueEnd = jsonStr.find("}", kValueStart);
+        
+        string kValue = jsonStr.substr(kValueStart, kValueEnd - kValueStart);
+        kValue.erase(remove_if(kValue.begin(), kValue.end(), ::isspace), kValue.end());
+        result["k"] = kValue;
+    }
+    
+    // Find all numbered sections
+    for (int i = 1; i <= 20; i++) { // Assuming max 20 roots
+        string searchKey = "\"" + to_string(i) + "\"";
+        size_t pos = jsonStr.find(searchKey);
+        if (pos == string::npos) continue;
+        
+        // Find base
+        size_t basePos = jsonStr.find("\"base\"", pos);
+        if (basePos == string::npos) continue;
+        
+        size_t baseValueStart = jsonStr.find(":", basePos);
+        baseValueStart = jsonStr.find("\"", baseValueStart) + 1;
+        size_t baseValueEnd = jsonStr.find("\"", baseValueStart);
+        
+        string baseValue = jsonStr.substr(baseValueStart, baseValueEnd - baseValueStart);
+        result[to_string(i) + "_base"] = baseValue;
+        
+        // Find value
+        size_t valuePos = jsonStr.find("\"value\"", basePos);
+        if (valuePos == string::npos) continue;
+        
+        size_t valueValueStart = jsonStr.find(":", valuePos);
+        valueValueStart = jsonStr.find("\"", valueValueStart) + 1;
+        size_t valueValueEnd = jsonStr.find("\"", valueValueStart);
+        
+        string valueValue = jsonStr.substr(valueValueStart, valueValueEnd - valueValueStart);
+        result[to_string(i) + "_value"] = valueValue;
+    }
+    
+    return result;
+}
+
+int main() {
+    string jsonInput = "";
+    string line;
+    
+    // Read multi-line JSON input until user types "END"
+    while (getline(cin, line)) {
+        if (line == "END") {
+            break;
+        }
+        jsonInput += line + "\n";
+    }
+    
+    map<string, string> data = parseJSON(jsonInput);
+    
+    if (data.find("n") == data.end() || data.find("k") == data.end()) {
+        return 1;
+    }
+    
+    int n = stoi(data["n"]);
+    int k = stoi(data["k"]);
+    
+    vector<pair<long long, long long>> points;
+    
+    // Extract points and convert to decimal
+    for (int i = 1; i <= n; i++) {
+        string baseKey = to_string(i) + "_base";
+        string valueKey = to_string(i) + "_value";
+        
+        if (data.find(baseKey) != data.end() && data.find(valueKey) != data.end()) {
+            int base = stoi(data[baseKey]);
+            string value = data[valueKey];
+            
+            long long decimalValue = baseToDecimal(value, base);
+            points.push_back({i, decimalValue});
+        }
+    }
+    
+    if (points.size() < k) {
+        return 1;
+    }
+    
+    // We only need k points to solve the polynomial
+    if (points.size() > k) {
+        points.resize(k);
+    }
+    
+    // Find the constant term using Lagrange interpolation
+    long long constantTerm = lagrangeInterpolation(points);
+    
+    cout << constantTerm << endl;
+    
+    return 0;
+}
